@@ -1,0 +1,62 @@
+{
+  "algorithm": "Hist Gradient Boosting",
+  "cv_folds": 10,
+  "mean_rmse": 556.63,
+  "std_rmse": 16.81,
+  "mean_mae": 292.15,
+  "training_rows": 53772,
+  "average_price": 3931.14,
+  "sklearn_version": "1.6.1",
+  "numeric_features": [
+    "carat",
+    "depth",
+    "table"
+  ],
+  "categorical_features": [
+    "cut",
+    "color",
+    "clarity"
+  ],
+  "categories": {
+    "cut": [
+      "Fair",
+      "Good",
+      "Ideal",
+      "Premium",
+      "Very Good"
+    ],
+    "color": [
+      "D",
+      "E",
+      "F",
+      "G",
+      "H",
+      "I",
+      "J"
+    ],
+    "clarity": [
+      "I1",
+      "IF",
+      "SI1",
+      "SI2",
+      "VS1",
+      "VS2",
+      "VVS1",
+      "VVS2"
+    ]
+  },
+  "ranges": {
+    "carat": [
+      0.2,
+      5.01
+    ],
+    "depth": [
+      43.0,
+      79.0
+    ],
+    "table": [
+      43.0,
+      95.0
+    ]
+  }
+}
