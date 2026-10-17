@@ -1,32 +1,29 @@
 """
-Diamond Price Predictor - Assignment 3 web app
-----------------------------------------------------------
-Loads the trained pipeline (diamond_price_model.pkl) produced by the notebook
-"diamond_price_kfold_full_dataset_10fold.ipynb" and predicts the price of a
-diamond from six characteristics.
+Diamond Price Estimator - Assignment 3 web app
 
-The pickle contains the WHOLE pipeline (imputer + scaler + one-hot encoder +
-algorithm), so raw values can be passed straight to model.predict().
-model_info.json (also written by the notebook) supplies the category lists,
-the valid input ranges and the cross-validation error shown under the result.
-
-Visual identity: a grading-certificate look (ice-blue paper, ink text, teal
-accents, double border), deliberately different from the other course apps.
+Loads diamond_price_model.pkl (the whole pipeline: pre-processing + best
+algorithm, saved by the notebook) and predicts a diamond's price from six
+characteristics. model_info.json supplies the category lists, the input
+ranges and the cross-validation error.
 """
 
 import json
+import pickle
 from pathlib import Path
 
 import pandas as pd
-import pickle
 import sklearn
 import streamlit as st
 
-st.set_page_config(page_title="Diamond Price Certificate", page_icon="💎", layout="centered")
+st.set_page_config(page_title="Diamond Price Estimator", page_icon="💎", layout="centered")
 
 HERE = Path(__file__).parent
 MODEL_PATH = HERE / "diamond_price_model.pkl"
 INFO_PATH = HERE / "model_info.json"
+
+# Cheapest diamond in the dataset. The model can drift below it for rare small,
+# low-grade stones, so estimates are never shown under this value.
+MIN_PRICE = 326.0
 
 
 @st.cache_resource
@@ -44,15 +41,13 @@ def load_info():
 model = load_model()
 info = load_info()
 
-# Cut, colour and clarity are listed from worst to best, which is easier to read
-# than the alphabetical order stored in model_info.json.
+# Shown from the lowest grade to the highest
 CUT_ORDER = ["Fair", "Good", "Very Good", "Premium", "Ideal"]
 COLOR_ORDER = ["J", "I", "H", "G", "F", "E", "D"]
 CLARITY_ORDER = ["I1", "SI2", "SI1", "VS2", "VS1", "VVS2", "VVS1", "IF"]
 
 
 def ordered(preferred, available):
-    """Keep only the options the model knows, in the preferred order."""
     return [o for o in preferred if o in available] or sorted(available)
 
 
@@ -63,124 +58,81 @@ carat_lo, carat_hi = info["ranges"]["carat"]
 depth_lo, depth_hi = info["ranges"]["depth"]
 table_lo, table_hi = info["ranges"]["table"]
 
-# ---------------------------------------------------------------------------
-# Visual identity
-# ---------------------------------------------------------------------------
 st.markdown(
     """
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,700&family=Work+Sans:wght@400;500;600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
-    :root {
-        --paper: #EEF3F7;
-        --ink: #14202B;
-        --ink-soft: #4B5B69;
-        --teal: #1F8A9E;
-        --teal-deep: #176B7B;
-        --line: #B9C7D3;
-        --card: #FBFDFE;
-    }
+    html, body, .stApp, .stApp * { font-family: 'Inter', system-ui, -apple-system, 'Segoe UI', sans-serif; }
+    .stApp { background: #ffffff; color: #111111; }
+    .block-container { max-width: 620px; padding-top: 4.5rem; padding-bottom: 3rem; }
+    #MainMenu, footer { visibility: hidden; }
 
-    .stApp { background: var(--paper); color: var(--ink); font-family: 'Work Sans', sans-serif; }
-    .block-container { padding-top: 2.2rem; max-width: 760px; }
+    .app-title { font-size: 1.7rem; font-weight: 600; letter-spacing: -0.01em; margin: 0; color: #111111; }
+    .app-sub { font-size: 0.95rem; color: #6b7280; margin: 0.4rem 0 2.2rem 0; }
 
-    .cert-frame {
-        border: 1px solid var(--ink);
-        outline: 1px solid var(--line);
-        outline-offset: 5px;
-        background: var(--card);
-        padding: 1.8rem 2rem 1.5rem 2rem;
-        margin: 0 0 2rem 0;
-        text-align: center;
-    }
-    .cert-kicker { color: var(--teal-deep); font-size: 0.82rem; letter-spacing: 0.12em; margin: 0 0 0.5rem 0; }
-    .cert-title { font-family: 'Fraunces', serif; font-weight: 700; font-size: 2.3rem; line-height: 1.1; margin: 0; }
-    .cert-sub { color: var(--ink-soft); font-size: 0.95rem; margin: 0.8rem auto 0 auto; max-width: 34rem; }
-
-    .section-title { font-family: 'Fraunces', serif; font-weight: 500; font-size: 1.25rem; margin: 0.3rem 0 0.2rem 0; }
-    .section-hint { color: var(--ink-soft); font-size: 0.88rem; margin: 0 0 0.9rem 0; }
-
-    label, [data-testid="stWidgetLabel"] p { color: var(--ink) !important; font-weight: 500 !important; }
+    [data-testid="stWidgetLabel"] p { font-size: 0.82rem; font-weight: 500; color: #4b5563; }
     div[data-baseweb="select"] > div, div[data-baseweb="input"] > div {
-        background: var(--card) !important; border: 1px solid var(--line) !important; border-radius: 4px;
+        background: #ffffff; border: 1px solid #e5e7eb; border-radius: 6px; box-shadow: none;
     }
+    div[data-baseweb="select"] div, input { color: #111111 !important; }
 
     .stButton > button {
-        background: var(--teal); color: #fff; border: none; border-radius: 4px;
-        font-family: 'Work Sans', sans-serif; font-weight: 600; padding: 0.65rem 1rem;
+        background: #111111; color: #ffffff; border: none; border-radius: 6px;
+        font-weight: 500; padding: 0.6rem 1rem; box-shadow: none;
     }
-    .stButton > button:hover { background: var(--teal-deep); color: #fff; }
+    .stButton > button:hover { background: #374151; color: #ffffff; }
+    .stButton > button:focus { box-shadow: none; color: #ffffff; }
 
-    .result-card {
-        border: 1px solid var(--ink); outline: 1px solid var(--line); outline-offset: 5px;
-        background: var(--card); padding: 1.6rem 2rem; margin: 2rem 0 1rem 0; text-align: center;
-    }
-    .result-label { color: var(--teal-deep); font-size: 0.82rem; letter-spacing: 0.12em; margin: 0; }
-    .result-price { font-family: 'Fraunces', serif; font-weight: 700; font-size: 3.4rem; margin: 0.2rem 0 0.3rem 0; }
-    .result-range { color: var(--ink-soft); font-size: 0.98rem; margin: 0; }
-    .result-note { color: var(--ink-soft); font-size: 0.85rem; margin: 1rem 0 0 0; border-top: 1px solid var(--line); padding-top: 0.8rem; }
+    .result { border-top: 1px solid #e5e7eb; margin-top: 2.2rem; padding-top: 1.6rem; }
+    .result-label { font-size: 0.82rem; color: #6b7280; margin: 0; }
+    .result-price { font-size: 3rem; font-weight: 600; letter-spacing: -0.02em; margin: 0.1rem 0 0.2rem 0; color: #111111; }
+    .result-range { font-size: 0.95rem; color: #4b5563; margin: 0; }
+    .result-note { font-size: 0.8rem; color: #9ca3af; margin: 0.9rem 0 0 0; }
 
-    .stCaption, [data-testid="stCaptionContainer"] { color: var(--ink-soft) !important; }
+    [data-testid="stCaptionContainer"] { color: #9ca3af; font-size: 0.78rem; }
     </style>
 
-    <div class="cert-frame">
-        <p class="cert-kicker">PRICE ESTIMATE · MACHINE LEARNING</p>
-        <p class="cert-title">Diamond Price Certificate</p>
-        <p class="cert-sub">
-            Describe a diamond by its carat, cut, colour, clarity, depth and table.
-            A trained model returns an estimated price in US dollars.
-        </p>
-    </div>
+    <p class="app-title">Diamond Price Estimator</p>
+    <p class="app-sub">Enter the diamond's details to get an estimated price in US dollars.</p>
     """,
     unsafe_allow_html=True,
 )
 
-# ---------------------------------------------------------------------------
-# Inputs
-# ---------------------------------------------------------------------------
-st.markdown('<p class="section-title">The diamond</p>', unsafe_allow_html=True)
-st.markdown('<p class="section-hint">Cut, colour and clarity are listed from the lowest grade to the highest.</p>', unsafe_allow_html=True)
-
 col1, col2 = st.columns(2)
 with col1:
-    carat = st.number_input("Carat (weight)", min_value=float(carat_lo), max_value=float(carat_hi),
+    carat = st.number_input("Carat", min_value=float(carat_lo), max_value=float(carat_hi),
                             value=1.00, step=0.01, format="%.2f")
-    cut = st.selectbox("Cut", cuts, index=len(cuts) - 1)
+    color = st.selectbox("Colour (J lowest, D highest)", colors,
+                         index=colors.index("G") if "G" in colors else 0)
+    depth = st.number_input("Depth (%)", min_value=float(depth_lo), max_value=float(depth_hi),
+                            value=61.8, step=0.1, format="%.1f")
 with col2:
-    color = st.selectbox("Colour (J lowest, D highest)", colors, index=colors.index("G") if "G" in colors else 0)
+    cut = st.selectbox("Cut", cuts, index=len(cuts) - 1)
     clarity = st.selectbox("Clarity (I1 lowest, IF highest)", clarities,
                            index=clarities.index("VS2") if "VS2" in clarities else 0)
+    table = st.number_input("Table (%)", min_value=float(table_lo), max_value=float(table_hi),
+                            value=57.0, step=0.1, format="%.1f")
 
-col3, col4 = st.columns(2)
-with col3:
-    depth = st.slider("Depth (%)", float(depth_lo), float(depth_hi), 61.8, 0.1)
-with col4:
-    table = st.slider("Table (%)", float(table_lo), float(table_hi), 57.0, 0.1)
-
-# ---------------------------------------------------------------------------
-# Prediction
-# ---------------------------------------------------------------------------
 if st.button("Estimate price", type="primary", use_container_width=True):
     row = pd.DataFrame([{
         "carat": carat, "depth": depth, "table": table,
         "cut": cut, "color": color, "clarity": clarity,
     }])[info["numeric_features"] + info["categorical_features"]]
 
-    price = float(model.predict(row)[0])
-    price = max(price, 0.0)
+    price = max(float(model.predict(row)[0]), MIN_PRICE)
     mae = info["mean_mae"]
-    low, high = max(price - mae, 0.0), price + mae
+    low, high = max(price - mae, MIN_PRICE), price + mae
 
     st.markdown(
         f"""
-        <div class="result-card">
-            <p class="result-label">ESTIMATED PRICE</p>
+        <div class="result">
+            <p class="result-label">Estimated price</p>
             <p class="result-price">${price:,.0f}</p>
-            <p class="result-range">Typical range: ${low:,.0f} to ${high:,.0f}</p>
+            <p class="result-range">Typical range ${low:,.0f} to ${high:,.0f}</p>
             <p class="result-note">
-                The range is the model's average absolute error (${mae:,.0f}) measured with
-                {info['cv_folds']}-fold cross validation on {info['training_rows']:,} diamonds.
-                Expensive diamonds can be off by more.
+                Range = the model's average absolute error (${mae:,.0f}), measured with
+                {info['cv_folds']}-fold cross validation. Expensive diamonds can be off by more.
             </p>
         </div>
         """,
@@ -190,20 +142,19 @@ if st.button("Estimate price", type="primary", use_container_width=True):
     if carat > 2.5:
         st.warning(
             "Very large diamonds are rare in the training data (about 0.2% are above 2.5 carat), "
-            "and this kind of model cannot predict far above the prices it has seen. "
-            "The estimate is probably too low."
+            "so this estimate is probably too low."
         )
 
-    with st.expander("See the exact input sent to the model"):
+    with st.expander("Input sent to the model"):
         st.dataframe(row, hide_index=True)
 
-st.divider()
+st.write("")
 st.caption(
-    f"Model: {info['algorithm']} · cross-validated RMSE ${info['mean_rmse']:,.0f} (± ${info['std_rmse']:,.0f}) · "
-    "AIC354 Assignment 3 teaching demo. Estimates reflect one public dataset and are not a jeweller's appraisal."
+    f"{info['algorithm']} · cross-validated RMSE ${info['mean_rmse']:,.0f} · "
+    "AIC354 Assignment 3 teaching demo, not a jeweller's appraisal."
 )
 if info.get("sklearn_version") != sklearn.__version__:
     st.caption(
-        f"⚠ Model was saved with scikit-learn {info.get('sklearn_version')}, this app runs {sklearn.__version__}. "
+        f"Model saved with scikit-learn {info.get('sklearn_version')}, app runs {sklearn.__version__}. "
         "If predictions fail, make requirements.txt use the first version."
     )
